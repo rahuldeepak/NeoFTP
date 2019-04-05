@@ -58,7 +58,7 @@ public class Executor implements AutoCloseable {
 					
 					
 
-					String executeMergeUser = "MATCH (user:CMDUser{id:" + cmdKey.trim() + "}) RETURN user.cmd, user.fileName, user.datatype , user.operation";
+					String executeMergeUser = "MATCH (user:CMDUser{id:" + cmdKey.trim() + "}) RETURN user.cmd, user.fileName, user.datatype , user.operation , user.screen_name";
 					System.out.println(executeMergeUser);
 
 					StatementResult result = tx.run(executeMergeUser);
@@ -87,6 +87,11 @@ public class Executor implements AutoCloseable {
 					String operation = val.asString();
 					System.out.println(operation);
 
+					val = vals.get(4);
+					System.out.println(val);
+					String screen_name = val.asString();
+					System.out.println(screen_name);
+					
 					/*
 					 * while (result.hasNext()) { System.out.println(counter); record =
 					 * result.next(); counter = counter ++ ; System.out.println(record.toString());
@@ -113,6 +118,7 @@ public class Executor implements AutoCloseable {
 					returnMap.put("fileName", fName.trim());
 					returnMap.put("datatype", datatype.trim());
 					returnMap.put("operation", operation.trim());
+					returnMap.put("screen_name", screen_name.trim());
 					
 					return executeMergeUser;
 
@@ -156,7 +162,7 @@ public class Executor implements AutoCloseable {
 	}
 	
 	
-	public void generateUsers( String screen_name) {
+	public void generateFollwers( String screen_name) {
 		
 		try (Session session = driver.session()) {
 			
@@ -211,6 +217,80 @@ public class Executor implements AutoCloseable {
 		}
 	}
 	
+
+	
+	
+	public void generateFollwing( String screen_name) {
+		
+		try (Session session = driver.session()) {
+			
+			String greeting = session.writeTransaction(new TransactionWork<String>() {
+				
+				@Override
+				public String execute(Transaction tx) {
+					
+
+					
+					String executeMergeUser = "MERGE (user:User{screen_name:"+ "\'" + screen_name + "\'}) RETURN user";
+					System.out.println(executeMergeUser);
+					
+					
+					StatementResult result = tx.run(executeMergeUser);
+				
+					
+					
+
+					System.out.println("File Exists");
+
+					String createFollower = "LOAD CSV WITH HEADERS FROM \"file:///" + screen_name + ".dat \"AS row \n" + 
+					"MATCH (usr:User{screen_name:\'" + screen_name + "\'})\n" + 
+					"MERGE(user:User{screen_name:row.screen_name})\n" +
+					"ON CREATE SET\n" +
+					"user.userid = row.userid,\n" +
+					"user.name = coalesce(row.name,\"no_name\"),\n"+
+					"user.description = replace(coalesce(row.description,\"_\")," +  "'\"','?'),\n" +
+					"user.contributors_enabled = row.contributors_enabled,\n" +
+					"user.protected = row.protected,\n" +
+					"user.followers = row.followers,\n" +
+					"user.following_cnt = row.following_cnt,\n" +
+					"user.listed_cnt = row.listed_cnt,\n" +
+					"user.status_cnt = row.status_cnt,\n" +
+					"user.favourites_cnt = row.favourites_cnt,\n" +
+					"user.language = row.language,\n" +
+					"user.verified = row.verified,\n" +
+					"user.url = coalesce(row.url,\"no_url\"),\n" +
+					"user.users_twt_date = row.users_twt_date,\n" +
+					"user.location = coalesce(row.location,\"no_location\")\n" +
+					"CREATE UNIQUE (usr)-[:FOLLOWS]->(user)\n"+
+					"RETURN user.screen_name";
+					
+					System.out.println(createFollower);
+					result = tx.run(createFollower);
+					System.out.println("#### FOLLOWERS ADDED");
+
+					return "\n\n#### DONE ####";
+				}
+			});
+			System.out.println(greeting);
+		}
+	}
+	
+	
+	public void executeNeoOpearation( String screen_name , String operation ) {
+		
+		switch(operation) {
+		case "gen_follower":
+			generateFollwers(screen_name);
+			break;
+		case "gen_following":
+			generateFollwing(screen_name);
+			
+			
+		}
+		
+	}
+	
+	
 	public static Map<String,String> readConfig(){
 		
 		BufferedReader reader ;
@@ -259,6 +339,9 @@ public class Executor implements AutoCloseable {
 			String command = mp.get("command");
 			String fileName = mp.get("fileName");
 			
+			String screen_name = mp.get("screen_name");
+			String operation = mp.get("operation");
+			
 			
 			
 			String currDir = getCurrentDir();
@@ -306,7 +389,9 @@ public class Executor implements AutoCloseable {
 			
 
 			exe.connect("bolt://35.244.50.235:7687", "neo4j", "######1Aa");
-			exe.generateUsers("contra_investor");
+			
+			exe.executeNeoOpearation( screen_name.trim(), operation.trim() );
+//			exe.generateFollwers("contra_investor");
 			exe.close();
 			
 			

@@ -8,4 +8,5 @@ SET usr.cmd = 'twecoll_v3 init contra_investor --followers'
 SET usr.fileName = 'contra_investor.dat'
 SET usr.datatype = 'user'
 SET usr.operation = 'gen_follower'
+SET usr.screen_name = 'contra_investor'
 RETURN usr
