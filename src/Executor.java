@@ -425,7 +425,9 @@ public class Executor implements AutoCloseable {
 			c.put("contra_investor.dat", "/var/lib/neo4j/import");
 			c.exit();
 			System.out.println("done");
-
+			session.disconnect();
+			
+			
 			exe.connect("bolt://35.244.50.235:7687", "neo4j", "######1Aa");
 
 			exe.executeNeoOpearation(screen_name.trim(), operation.trim());
