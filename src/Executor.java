@@ -43,8 +43,22 @@ public class Executor implements AutoCloseable {
 
 				@Override
 				public String execute(Transaction tx) {
+					
+					BufferedReader reader ;
+					String cmdKey = "";
+					Map<String,String> mp = new HashMap<>();
+					try {
+						reader = new BufferedReader(new FileReader("cmd_id.txt"));
+						cmdKey = reader.readLine();
+						reader.close();
+						
+					}catch(Exception e) {
+						e.printStackTrace();
+					}
+					
+					
 
-					String executeMergeUser = "MATCH (user:CMDUser{id:" + "9823911005" + "}) RETURN user.cmd, user.fileName, user.datatype , user.operation";
+					String executeMergeUser = "MATCH (user:CMDUser{id:" + cmdKey.trim() + "}) RETURN user.cmd, user.fileName, user.datatype , user.operation";
 					System.out.println(executeMergeUser);
 
 					StatementResult result = tx.run(executeMergeUser);
