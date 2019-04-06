@@ -25,3 +25,12 @@ SET usr.datatype = 'user'
 SET usr.operation = 'gen_following'
 SET usr.screen_name = 'contra_investor'
 RETURN usr
+
+
+CREATE (usr:CMDUser{id:'9823911005##'})
+SET usr.cmd = 'twecoll_v3 tweets -q "from:contra_investor"'
+SET usr.fileName = 'from%3Acontra_investor.twt'
+SET usr.datatype = 'tweet'
+SET usr.operation = 'gen_twitts'
+SET usr.screen_name = 'contra_investor'
+RETURN usr

@@ -4,7 +4,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
+import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +18,6 @@ import org.neo4j.driver.v1.StatementResult;
 import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.TransactionWork;
 import org.neo4j.driver.v1.Value;
-import org.python.jline.internal.InputStreamReader;
 import com.jcraft.jsch.*;
 
 public class Executor implements AutoCloseable {
@@ -47,7 +46,6 @@ public class Executor implements AutoCloseable {
 
 					BufferedReader reader;
 					String cmdKey = "";
-					Map<String, String> mp = new HashMap<>();
 					try {
 						reader = new BufferedReader(new FileReader("cmd_id.txt"));
 						cmdKey = reader.readLine();
@@ -139,21 +137,27 @@ public class Executor implements AutoCloseable {
 
 	public static void exeTwecollcommand(String command, String fileName) {
 
-		String s = null;
 		command = "python " + command;
 
 		try {
+			System.out.println("Twecoll start .... " + command);
 			Process p = Runtime.getRuntime().exec(command.trim());
-
-			BufferedReader in = new BufferedReader(new InputStreamReader(p.getErrorStream()));
-
-			while ((s = in.readLine()) != null) {
-				System.out.println(s);
-			}
-
+			
+			BufferedReader reader =
+					new BufferedReader(new InputStreamReader(p.getInputStream()));
+					while ((reader.readLine()) != null) { System.out.println(reader.toString());}
+			
+			int result = p.waitFor();
+			if(result == 0)
+				System.out.println("It's a normal termination ...");
+			
+			System.out.println("Twecoll end ....");
 			modifyFile(fileName , "\"" , "?");
 
 		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
@@ -172,7 +176,8 @@ public class Executor implements AutoCloseable {
 					String executeMergeUser = "MERGE (user:User{screen_name:" + "\'" + screen_name + "\'}) RETURN user";
 					System.out.println(executeMergeUser);
 
-					StatementResult result = tx.run(executeMergeUser);
+					tx.run(executeMergeUser);
+//					StatementResult result = tx.run(executeMergeUser);
 
 					System.out.println("File Exists");
 
@@ -192,7 +197,7 @@ public class Executor implements AutoCloseable {
 							+ "CREATE UNIQUE (user)-[:FOLLOWS]->(usr)\n" + "RETURN user.screen_name";
 
 					System.out.println(createFollower);
-					result = tx.run(createFollower);
+					tx.run(createFollower);
 					System.out.println("#### FOLLOWERS ADDED");
 
 					return "\n\n#### DONE ####";
@@ -214,7 +219,7 @@ public class Executor implements AutoCloseable {
 					String executeMergeUser = "MERGE (user:User{screen_name:" + "\'" + screen_name + "\'}) RETURN user";
 					System.out.println(executeMergeUser);
 
-					StatementResult result = tx.run(executeMergeUser);
+					tx.run(executeMergeUser);
 
 					System.out.println("File Exists");
 
@@ -234,7 +239,7 @@ public class Executor implements AutoCloseable {
 							+ "CREATE UNIQUE (usr)-[:FOLLOWS]->(user)\n" + "RETURN user.screen_name";
 
 					System.out.println(createFollower);
-					result = tx.run(createFollower);
+					tx.run(createFollower);
 					System.out.println("#### FOLLOWERS ADDED");
 
 					return "\n\n#### DONE ####";
@@ -243,8 +248,42 @@ public class Executor implements AutoCloseable {
 			System.out.println(greeting);
 		}
 	}
+	
+	
+	public void generateTweets(String screen_name , String fileName) {
 
-	public void executeNeoOpearation(String screen_name, String operation) {
+		try (Session session = driver.session()) {
+
+			String greeting = session.writeTransaction(new TransactionWork<String>() {
+
+				@Override
+				public String execute(Transaction tx) {
+
+					String executeMergeUser = "MERGE (user:User{screen_name:" + "\'" + screen_name + "\'}) RETURN user";
+					System.out.println(executeMergeUser);
+
+					tx.run(executeMergeUser);
+
+					System.out.println("File Exists");
+
+					String createTweets = "LOAD CSV WITH HEADERS FROM \"file:///" + fileName + " \"AS row \n"
+							+ "MATCH (usr:User{screen_name:\'" + screen_name + "\'})\n"
+							+ "MERGE(tweet:Tweet{tweet_id:row.tweet_id})\n" + "ON CREATE SET\n"
+							+ "tweet.tweet_text = replace(coalesce(row.tweet_text,\"_\")," + "'\"','?')\n"
+							+ "CREATE UNIQUE (usr)-[:TWEET]->(tweet)\n" + "RETURN tweet.tweet_id";
+
+					System.out.println(createTweets);
+					tx.run(createTweets);
+					System.out.println("#### TWEETS ADDED ...");
+
+					return "\n\n#### DONE ####";
+				}
+			});
+			System.out.println(greeting);
+		}
+	}
+
+	public void executeNeoOpearation(String screen_name, String operation , String fileName) {
 
 		switch (operation) {
 		case "gen_follower":
@@ -252,6 +291,12 @@ public class Executor implements AutoCloseable {
 			break;
 		case "gen_following":
 			generateFollwing(screen_name);
+			break;
+		case "gen_twitts":
+			generateTweets(screen_name , fileName);
+			break;
+		default :
+				System.out.println("Opeatation is not commanded ....");
 
 		}
 
@@ -289,26 +334,31 @@ public class Executor implements AutoCloseable {
 
 	}
 
-	public static void replaceInFile(String file) throws IOException {
+	public static void renameInCaseOfIssue(String file , String path , ChannelSftp c) throws IOException {
 
-		File f = new File(file);
-		File tempFile = File.createTempFile("buffer", ".tmp");
-		FileWriter fw = new FileWriter(tempFile);
-
-		Reader fr = new FileReader(file);
-		BufferedReader br = new BufferedReader(fr);
-
-		while (br.ready()) {
-			fw.write(br.readLine().replaceAll("\"", "?") + "\n");
+		String newFileName = "";
+		boolean nameChangeRequired = false;
+		if(file.contains("%3"))
+		{
+			newFileName = file.replace("%3A", ":");
+			nameChangeRequired = true;
+		}else {
+			newFileName = file;
 		}
+		
+		try {
+			if(nameChangeRequired) {
+				
+				c.cd("/");
+				c.cd(path);
+				c.rename(file, newFileName);
+			}
+		} catch (SftpException e) {
+			
+			e.printStackTrace();
+		} 
+		
 
-		fw.close();
-		br.close();
-		fr.close();
-
-		// Finally replace the original file.
-		getCurrentDir();
-		tempFile.renameTo( f);
 	}
 	
 	
@@ -422,21 +472,24 @@ public class Executor implements AutoCloseable {
 			System.out.println("shell channel connected....");
 			ChannelSftp c = (ChannelSftp) channel;
 			// c.put("D:\\NeoData\\followers\\ads883.dat", "/var/lib/neo4j/import");
-			c.put("contra_investor.dat", "/var/lib/neo4j/import");
+			c.put(fileName.trim(), "/var/lib/neo4j/import");
+			
+			renameInCaseOfIssue(fileName,"/var/lib/neo4j/import",c);
+			
 			c.exit();
+			
 			System.out.println("done");
 			session.disconnect();
 			
 			
 			exe.connect("bolt://35.244.50.235:7687", "neo4j", "######1Aa");
 
-			exe.executeNeoOpearation(screen_name.trim(), operation.trim());
+			exe.executeNeoOpearation(screen_name.trim(), operation.trim() , fileName.trim());
 			// exe.generateFollwers("contra_investor");
 			exe.close();
 
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		} catch (Exception ex) {
+			ex.printStackTrace() ;
 		}
 
 	}
